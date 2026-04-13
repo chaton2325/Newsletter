@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h5 class="m-0 fw-bold">Mes Configurations SMTP</h5>
+        <a href="{{ url_for('settings.add_smtp') }}" class="btn btn-primary btn-sm rounded-pill px-3">
+            <i class="bi bi-plus-circle-fill me-1"></i> Ajouter un SMTP
+        </a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-4">Alias</th>
+                        <th>Serveur</th>
+                        <th>Email d'envoi</th>
+                        <th>TLS</th>
+                        <th class="pe-4 text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for config in configs %}
+                    <tr>
+                        <td class="ps-4 fw-bold text-primary">{{ config.alias }}</td>
+                        <td><code>{{ config.server }}:{{ config.port }}</code></td>
+                        <td>{{ config.email }}</td>
+                        <td>
+                            {% if config.use_tls %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill">Oui</span>
+                            {% else %}
+                            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill">Non</span>
+                            {% endif %}
+                        </td>
+                        <td class="pe-4 text-end">
+                            <div class="btn-group">
+                                <a href="{{ url_for('settings.edit_smtp', id=config.id) }}" class="btn btn-sm btn-outline-dark">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <button type="button" class="btn btn-sm btn-outline-danger" 
+                                        onclick="confirmDeleteSMTP({{ config.id }}, '{{ config.alias }}')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center py-5 text-muted">
+                            <i class="bi bi-gear-wide-connected fs-1 d-block mb-3 opacity-25"></i>
+                            Aucune configuration SMTP trouvée.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Confirmation Suppression SMTP -->
+<div class="modal fade" id="deleteSMTPModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirmer la suppression</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                Êtes-vous sûr de vouloir supprimer la configuration SMTP <strong id="deleteSMTPAlias"></strong> ?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <a href="#" id="deleteSMTPConfirmBtn" class="btn btn-danger">Supprimer</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function confirmDeleteSMTP(id, alias) {
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteSMTPModal'));
+    document.getElementById('deleteSMTPAlias').innerText = alias;
+    document.getElementById('deleteSMTPConfirmBtn').href = "{{ url_for('settings.delete_smtp', id=0) }}".replace('0', id);
+    deleteModal.show();
+}
+</script>
+{% endblock %}

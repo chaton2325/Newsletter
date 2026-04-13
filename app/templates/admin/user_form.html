@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 mx-auto">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white">
+                <h5 class="m-0 fw-bold">{{ title }}</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-uppercase">Nom d'utilisateur</label>
+                        {{ form.username(class="form-control") }}
+                        {% for error in form.username.errors %}
+                        <span class="text-danger small">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-uppercase">Rôle</label>
+                        {{ form.role(class="form-select") }}
+                        {% for error in form.role.errors %}
+                        <span class="text-danger small">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-uppercase">
+                            {% if 'Modifier' in title %}Nouveau mot de passe (optionnel){% else %}Mot de passe{% endif %}
+                        </label>
+                        {{ form.password(class="form-control", placeholder="••••••••") }}
+                        {% for error in form.password.errors %}
+                        <span class="text-danger small">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                    
+                    {% if form.confirm_password %}
+                    <div class="mb-4">
+                        <label class="form-label fw-bold small text-uppercase">Confirmer le mot de passe</label>
+                        {{ form.confirm_password(class="form-control", placeholder="••••••••") }}
+                        {% for error in form.confirm_password.errors %}
+                        <span class="text-danger small">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="d-grid gap-2">
+                        {{ form.submit(class="btn btn-primary btn-lg") }}
+                        <a href="{{ url_for('admin.list_users') }}" class="btn btn-outline-secondary">Annuler</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        {% if 'Modifier' in title and user %}
+        <div class="alert alert-warning mt-4 border-0 shadow-sm small">
+            <i class="bi bi-info-circle me-1"></i>
+            En modifiant le rôle d'un utilisateur, ses permissions seront mises à jour lors de sa prochaine connexion.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white">
+                <h5 class="m-0 fw-bold">{{ title }}</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small text-uppercase">Prénom</label>
+                            {{ form.first_name(class="form-control") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small text-uppercase">Nom</label>
+                            {{ form.last_name(class="form-control") }}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-uppercase">Email</label>
+                        {{ form.email(class="form-control", placeholder="exemple@mail.com") }}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-uppercase">Téléphone (Optionnel)</label>
+                        {{ form.phone(class="form-control") }}
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="form-label fw-bold small text-uppercase">Assigner à des groupes</label>
+                        {{ form.groups(class="form-select", size="5") }}
+                        <div class="form-text small">Maintenez Ctrl (ou Cmd) pour sélectionner plusieurs groupes.</div>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        {{ form.submit(class="btn btn-primary btn-lg") }}
+                        <a href="{{ url_for('contacts.list_contacts') }}" class="btn btn-outline-secondary">Annuler</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

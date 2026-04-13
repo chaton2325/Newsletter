@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="auth-wrapper">
+    <div class="auth-card">
+        <div class="auth-brand">
+            MIR<span>LETTER</span>
+        </div>
+        <h5 class="text-center mb-4 text-muted">Connexion sécurisée</h5>
+        
+        <form method="POST">
+            {{ form.hidden_tag() }}
+            
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-uppercase" style="letter-spacing: 1px;">Nom d'utilisateur</label>
+                {{ form.username(class="form-control form-control-lg", placeholder="Entrez votre pseudo") }}
+                {% for error in form.username.errors %}
+                <span class="text-danger small">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <div class="mb-4">
+                <label class="form-label small fw-bold text-uppercase" style="letter-spacing: 1px;">Mot de passe</label>
+                {{ form.password(class="form-control form-control-lg", placeholder="••••••••") }}
+                {% for error in form.password.errors %}
+                <span class="text-danger small">{{ error }}</span>
+                {% endfor %}
+            </div>
+            
+            <div class="mb-4 form-check">
+                {{ form.remember_me(class="form-check-input") }}
+                <label class="form-check-label small" for="remember_me">Se souvenir de moi</label>
+            </div>
+            
+            <div class="d-grid">
+                {{ form.submit(class="btn btn-primary btn-lg shadow-sm") }}
+            </div>
+        </form>
+        
+        <div class="mt-4 text-center">
+            <p class="text-muted small">Besoin d'aide ? Contactez un administrateur.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white">
+                <h5 class="m-0 fw-bold">{{ title }}</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="smtpForm">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-uppercase">Nom de la configuration</label>
+                        {{ form.alias(class="form-control", placeholder="Ex: Gmail Pro") }}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small text-uppercase">Serveur SMTP</label>
+                                {{ form.server(class="form-control", placeholder="smtp.gmail.com") }}
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small text-uppercase">Port</label>
+                                {{ form.port(class="form-control") }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-uppercase">Email expéditeur</label>
+                        {{ form.email(class="form-control", placeholder="votre@email.com") }}
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="form-label fw-bold small text-uppercase">Mot de passe SMTP / Clé d'application</label>
+                        {{ form.password(class="form-control", placeholder="••••••••") }}
+                        <div class="form-text small">Laisser vide pour ne pas changer si vous modifiez une configuration existante.</div>
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="form-check form-switch">
+                            {{ form.use_tls(class="form-check-input") }}
+                            <label class="form-check-label fw-bold small text-uppercase" for="use_tls">Utiliser TLS (Sécurisé)</label>
+                        </div>
+                    </div>
+                    
+                    <div id="testResult" class="mb-3 d-none alert"></div>
+
+                    <div class="d-grid gap-2">
+                        <button type="button" id="testConfigBtn" class="btn btn-outline-primary">
+                            <span id="testSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                            <i class="bi bi-shield-check me-1"></i> Tester la connexion
+                        </button>
+                        {{ form.submit(class="btn btn-primary btn-lg") }}
+                        <a href="{{ url_for('settings.list_smtp') }}" class="btn btn-outline-secondary">Annuler</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const testBtn = document.getElementById('testConfigBtn');
+    const testResult = document.getElementById('testResult');
+    const spinner = document.getElementById('testSpinner');
+
+    testBtn.addEventListener('click', function() {
+        const server = document.getElementById('server').value;
+        const port = document.getElementById('port').value;
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const use_tls = document.getElementById('use_tls').checked;
+
+        if(!server || !port || !email || !password) {
+            testResult.innerText = "Veuillez remplir tous les champs avant de tester.";
+            testResult.classList.remove('d-none', 'alert-success');
+            testResult.classList.add('alert-warning');
+            return;
+        }
+
+        testResult.classList.add('d-none');
+        spinner.classList.remove('d-none');
+        testBtn.disabled = true;
+
+        fetch('{{ url_for("settings.test_smtp") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({
+                server: server, port: port, email: email, password: password, use_tls: use_tls
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            spinner.classList.add('d-none');
+            testBtn.disabled = false;
+            testResult.innerText = data.message;
+            testResult.classList.remove('d-none');
+            testResult.classList.remove('alert-success', 'alert-danger', 'alert-warning');
+            testResult.classList.add(data.success ? 'alert-success' : 'alert-danger');
+        })
+        .catch(error => {
+            spinner.classList.add('d-none');
+            testBtn.disabled = false;
+            testResult.innerText = "Une erreur est survenue lors du test.";
+            testResult.classList.remove('d-none');
+            testResult.classList.add('alert-danger');
+        });
+    });
+});
+</script>
+{% endblock %}

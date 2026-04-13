@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <!-- Groups Sidebar -->
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white">
+                <h6 class="m-0 fw-bold"><i class="bi bi-collection me-2"></i>Mes Groupes</h6>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('contacts.add_group') }}" method="POST" class="mb-3">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="input-group">
+                        <input type="text" name="name" class="form-control form-control-sm" placeholder="Nom du groupe" required>
+                        <button class="btn btn-sm btn-primary" type="submit">Créer</button>
+                    </div>
+                </form>
+                
+                <div class="list-group list-group-flush">
+                    {% for group in groups %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center px-0 bg-transparent">
+                        <div>
+                            <span class="fw-medium">{{ group.name }}</span>
+                            <span class="badge bg-secondary rounded-pill ms-1">{{ group.contacts|length }}</span>
+                        </div>
+                        <a href="{{ url_for('contacts.delete_group', id=group.id) }}" class="text-danger small" onclick="return confirm('Supprimer ce groupe ?')">
+                            <i class="bi bi-x-circle"></i>
+                        </a>
+                    </div>
+                    {% else %}
+                    <p class="text-muted small text-center my-3">Aucun groupe créé.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contacts Table -->
+    <div class="col-md-9">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h5 class="m-0 fw-bold">Gestion des Contacts</h5>
+                <a href="{{ url_for('contacts.add_contact') }}" class="btn btn-primary btn-sm rounded-pill px-3">
+                    <i class="bi bi-person-plus-fill me-1"></i> Nouveau contact
+                </a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th class="ps-4">Nom Complet</th>
+                                <th>Email</th>
+                                <th>Groupes</th>
+                                <th class="pe-4 text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for contact in contacts %}
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="fw-bold">{{ contact.full_name }}</div>
+                                    <div class="small text-muted">{{ contact.phone or '' }}</div>
+                                </td>
+                                <td>{{ contact.email }}</td>
+                                <td>
+                                    {% for group in contact.groups %}
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill small">{{ group.name }}</span>
+                                    {% else %}
+                                    <span class="text-muted small">-</span>
+                                    {% endfor %}
+                                </td>
+                                <td class="pe-4 text-end">
+                                    <div class="btn-group">
+                                        <a href="{{ url_for('contacts.edit_contact', id=contact.id) }}" class="btn btn-sm btn-outline-dark">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <a href="{{ url_for('contacts.delete_contact', id=contact.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Supprimer ce contact ?')">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center py-5 text-muted">
+                                    <i class="bi bi-person-slash fs-1 d-block mb-3 opacity-25"></i>
+                                    Aucun contact.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

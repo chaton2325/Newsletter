@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h5 class="m-0 fw-bold">Gestion des Utilisateurs</h5>
+        <a href="{{ url_for('admin.create_user') }}" class="btn btn-primary btn-sm rounded-pill px-3">
+            <i class="bi bi-person-plus-fill me-1"></i> Nouvel utilisateur
+        </a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-4">ID</th>
+                        <th>Nom d'utilisateur</th>
+                        <th>Rôle</th>
+                        <th class="pe-4 text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td class="ps-4 text-muted small">{{ user.id }}</td>
+                        <td class="fw-bold">
+                            {{ user.username }}
+                            {% if user.id == current_user.id %}
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill small px-2 ms-2">Vous</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.role == 'superadmin' %}
+                            <span class="badge bg-dark rounded-pill px-3">Superadmin</span>
+                            {% else %}
+                            <span class="badge bg-light text-dark border rounded-pill px-3">Utilisateur</span>
+                            {% endif %}
+                        </td>
+                        <td class="pe-4 text-end">
+                            <div class="btn-group">
+                                <a href="{{ url_for('admin.edit_user', id=user.id) }}" class="btn btn-sm btn-outline-dark">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% if user.id != current_user.id %}
+                                <button type="button" class="btn btn-sm btn-outline-danger" 
+                                        onclick="confirmDeleteUser({{ user.id }}, '{{ user.username }}')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Confirmation Suppression Utilisateur -->
+<div class="modal fade" id="deleteUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-danger">Supprimer l'utilisateur</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                Êtes-vous sûr de vouloir supprimer l'utilisateur <strong id="deleteUsername"></strong> ?
+                <p class="text-danger small mt-2">
+                    <i class="bi bi-exclamation-triangle me-1"></i> Cette action supprimera également tous ses contacts et son historique.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <a href="#" id="deleteUserConfirmBtn" class="btn btn-danger">Supprimer définitivement</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function confirmDeleteUser(id, username) {
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteUserModal'));
+    document.getElementById('deleteUsername').innerText = username;
+    document.getElementById('deleteUserConfirmBtn').href = "{{ url_for('admin.delete_user', id=0) }}".replace('0', id);
+    deleteModal.show();
+}
+</script>
+{% endblock %}

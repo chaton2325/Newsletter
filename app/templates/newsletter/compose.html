@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Summernote Lite CSS (Pas besoin de clé API) -->
+<link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.css" rel="stylesheet">
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white">
+                <h5 class="m-0 fw-bold">Nouvelle Newsletter</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data" id="newsletterForm">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small text-uppercase">Objet de l'email</label>
+                                {{ form.subject(class="form-control form-control-lg", placeholder="Ex: Notre nouvelle collection est disponible !") }}
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small text-uppercase">Contenu du message</label>
+                                <!-- Le textarea original pour Summernote -->
+                                {{ form.content(id="summernote") }}
+                                <div class="form-text mt-2">
+                                    <i class="bi bi-info-circle me-1"></i> Cliquez sur une image pour la <strong>redimensionner</strong> directement.
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="card bg-light border-0 mb-3">
+                                <div class="card-body">
+                                    <div class="mb-4">
+                                        <label class="form-label fw-bold small text-uppercase text-primary">Serveur d'envoi (SMTP)</label>
+                                        {{ form.smtp_id(class="form-select") }}
+                                    </div>
+
+                                    <h6 class="fw-bold mb-3 small text-uppercase">Destinataires</h6>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label small">Par Groupes</label>
+                                        {{ form.group_recipients(class="form-select", size="5") }}
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label small">Par Contacts Individuels</label>
+                                        {{ form.recipients(class="form-select", size="8") }}
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <h6 class="fw-bold mb-3 small text-uppercase">Pièces jointes</h6>
+                                        {{ form.attachments(class="form-control") }}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid gap-2">
+                                <button type="button" class="btn btn-outline-primary btn-lg" id="previewBtn">
+                                    <i class="bi bi-eye me-2"></i> Prévisualiser
+                                </button>
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="bi bi-send me-2"></i> Envoyer la newsletter
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Preview Modal -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-0">
+                <h5 class="modal-title fw-bold" id="previewSubject"></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="previewContent" class="p-4 bg-white border rounded shadow-inner overflow-auto" style="max-height: 70vh;">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- jQuery est requis pour Summernote -->
+<script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+<!-- Summernote Lite JS (Version Open Source sans clé API) -->
+<script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>
+
+<script>
+    $(document).ready(function() {
+        $('#summernote').summernote({
+            placeholder: 'Rédigez votre newsletter ici...',
+            tabsize: 2,
+            height: 500,
+            lang: 'fr-FR',
+            toolbar: [
+                ['style', ['style']],
+                ['font', ['bold', 'underline', 'clear', 'italic']],
+                ['fontname', ['fontname']],
+                ['color', ['color']],
+                ['para', ['ul', 'ol', 'paragraph']],
+                ['table', ['table']],
+                ['insert', ['link', 'picture', 'video']],
+                ['view', ['fullscreen', 'codeview', 'help']]
+            ],
+            // Configuration de l'upload d'images vers notre serveur
+            callbacks: {
+                onImageUpload: function(files) {
+                    uploadImage(files[0]);
+                }
+            }
+        });
+
+        // Fonction d'upload AJAX vers Flask
+        function uploadImage(file) {
+            let data = new FormData();
+            data.append("upload", file);
+            data.append("csrf_token", "{{ csrf_token() }}");
+
+            $.ajax({
+                url: "{{ url_for('newsletter.upload_image') }}",
+                cache: false,
+                contentType: false,
+                processData: false,
+                data: data,
+                type: "POST",
+                success: function(response) {
+                    if(response.url) {
+                        $('#summernote').summernote('insertImage', response.url);
+                    }
+                },
+                error: function(data) {
+                    console.error("Erreur upload image:", data);
+                    alert("Erreur lors du téléchargement de l'image.");
+                }
+            });
+        }
+
+        // Prévisualisation
+        $('#previewBtn').on('click', function() {
+            const subject = $('#subject').val();
+            const content = $('#summernote').summernote('code');
+            
+            $('#previewSubject').text(subject || "Sans objet");
+            $('#previewContent').html(content || "<p class='text-muted'>Aucun contenu.</p>");
+            
+            // Appliquer dynamiquement le style aux images de la preview
+            $('#previewContent img').css({
+                'max-width': '100%',
+                'height': 'auto'
+            });
+            
+            let myModal = new bootstrap.Modal(document.getElementById('previewModal'));
+            myModal.show();
+        });
+    });
+</script>
+
+<style>
+    /* Correction du style pour que les images ne dépassent pas */
+    .note-editable img {
+        max-width: 100% !important;
+        height: auto !important;
+    }
+    .note-editor.note-frame {
+        border: 1px solid rgba(0,0,0,0.1);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    #previewContent img {
+        max-width: 100%;
+        height: auto;
+    }
+</style>
+{% endblock %}
