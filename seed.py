@@ -1,5 +1,5 @@
-from app import create_app, db
-from app.models.user import User
+from __init__ import create_app, db
+from models.user import User
 import os
 
 def seed():
