@@ -43,6 +43,9 @@ def create_app(config_class=Config):
     from routes.settings import settings as settings_blueprint
     app.register_blueprint(settings_blueprint, url_prefix='/settings')
 
+    from routes.subscription import subscription as subscription_blueprint
+    app.register_blueprint(subscription_blueprint, url_prefix='/subscription')
+
     # Ensure upload directory exists
     if not os.path.exists(app.config['UPLOAD_FOLDER']):
         os.makedirs(app.config['UPLOAD_FOLDER'])

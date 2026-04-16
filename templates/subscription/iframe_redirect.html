@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Redirection...</title>
+</head>
+<body>
+    <p>Redirection vers la page de paiement...</p>
+    <script type="text/javascript">
+        // Sort de l'iframe pour rediriger la page parente
+        window.top.location.href = "{{ url }}";
+    </script>
+</body>
+</html>

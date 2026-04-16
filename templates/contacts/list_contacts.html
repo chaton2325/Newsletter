@@ -5,8 +5,11 @@
     <!-- Groups Sidebar -->
     <div class="col-md-3">
         <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-white">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
                 <h6 class="m-0 fw-bold"><i class="bi bi-collection me-2"></i>Mes Groupes</h6>
+                <button class="btn btn-sm btn-outline-primary py-0" onclick="showGlobalIframe()" title="Code Iframe Global">
+                    <i class="bi bi-code-slash"></i>
+                </button>
             </div>
             <div class="card-body">
                 <form action="{{ url_for('contacts.add_group') }}" method="POST" class="mb-3">
@@ -19,14 +22,31 @@
                 
                 <div class="list-group list-group-flush">
                     {% for group in groups %}
-                    <div class="list-group-item d-flex justify-content-between align-items-center px-0 bg-transparent">
-                        <div>
-                            <span class="fw-medium">{{ group.name }}</span>
-                            <span class="badge bg-secondary rounded-pill ms-1">{{ group.contacts|length }}</span>
+                    <div class="list-group-item d-flex justify-content-between align-items-center px-0 bg-transparent border-bottom">
+                        <div class="overflow-hidden">
+                            <span class="fw-medium text-truncate d-block">{{ group.name }}</span>
+                            <div class="d-flex align-items-center">
+                                <span class="badge bg-secondary rounded-pill small">{{ group.contacts|length }}</span>
+                                {% if group.is_paid %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill small ms-1">
+                                    {{ group.price }} {{ group.currency.upper() }}
+                                </span>
+                                {% endif %}
+                            </div>
                         </div>
-                        <a href="{{ url_for('contacts.delete_group', id=group.id) }}" class="text-danger small" onclick="return confirm('Supprimer ce groupe ?')">
-                            <i class="bi bi-x-circle"></i>
-                        </a>
+                        <div class="btn-group">
+                            <button class="btn btn-link p-1 text-primary small" 
+                                    onclick="showGroupIframe('{{ group.id }}', '{{ group.name }}')" 
+                                    title="Code Iframe du groupe">
+                                <i class="bi bi-code-slash"></i>
+                            </button>
+                            <a href="{{ url_for('contacts.edit_group', id=group.id) }}" class="btn btn-link p-1 text-dark small">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="{{ url_for('contacts.delete_group', id=group.id) }}" class="btn btn-link p-1 text-danger small" onclick="return confirm('Supprimer ce groupe ?')">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </div>
                     </div>
                     {% else %}
                     <p class="text-muted small text-center my-3">Aucun groupe créé.</p>
@@ -35,6 +55,87 @@
             </div>
         </div>
     </div>
+
+    <!-- Iframe Modal -->
+    <div class="modal fade" id="iframeModal" tabindex="-1" aria-labelledby="iframeModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header border-bottom-0">
+                    <h5 class="modal-title fw-bold" id="iframeModalLabel">Intégrer le formulaire</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Copiez le code ci-dessous et collez-le sur votre site web pour permettre à vos visiteurs de s'abonner.</p>
+                    
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Langue du formulaire :</label>
+                        <select class="form-select form-select-sm w-auto" id="langSelector">
+                            <option value="en" selected>English (Default)</option>
+                            <option value="fr">Français</option>
+                        </select>
+                    </div>
+
+                    <div class="bg-light p-3 rounded position-relative">
+                        <pre class="m-0" id="iframeCode"><code></code></pre>
+                        <button class="btn btn-sm btn-dark position-absolute top-0 end-0 m-2" onclick="copyToClipboard()">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let currentGroupId = null;
+
+    function copyToClipboard() {
+        const code = document.getElementById('iframeCode').innerText;
+        navigator.clipboard.writeText(code).then(() => {
+            alert('Code copié !');
+        });
+    }
+
+    function updateIframeCode() {
+        const lang = document.getElementById('langSelector').value;
+        const baseUrl = "{{ url_for('subscription.iframe_subscribe', user_id=current_user.id, _external=True) }}";
+        let finalUrl = `${baseUrl}?lang=${lang}`;
+        
+        if (currentGroupId) {
+            finalUrl += `&group_id=${currentGroupId}`;
+        }
+        
+        const randomId = 'newsletter_iframe_' + Math.floor(Math.random() * 1000);
+        const code = `<iframe id="${randomId}" src="${finalUrl}" width="100%" height="500" frameborder="0" style="border:none;overflow:hidden;"></iframe>
+<script>
+window.addEventListener('message', function(e) {
+  if (e.data.type === 'resize-iframe') {
+    document.getElementById('${randomId}').style.height = e.data.height + 'px';
+  }
+}, false);
+<\/script>`;
+        document.getElementById('iframeCode').innerText = code;
+    }
+
+    function showGroupIframe(groupId, groupName) {
+        currentGroupId = groupId;
+        document.getElementById('iframeModalLabel').innerText = `Intégrer le groupe : ${groupName}`;
+        updateIframeCode();
+        const modal = new bootstrap.Modal(document.getElementById('iframeModal'));
+        modal.show();
+    }
+
+    function showGlobalIframe() {
+        currentGroupId = null;
+        document.getElementById('iframeModalLabel').innerText = `Intégrer le formulaire global`;
+        updateIframeCode();
+        const modal = new bootstrap.Modal(document.getElementById('iframeModal'));
+        modal.show();
+    }
+
+    // Listener pour le changement de langue
+    document.getElementById('langSelector').addEventListener('change', updateIframeCode);
+    </script>
 
     <!-- Contacts Table -->
     <div class="col-md-9">

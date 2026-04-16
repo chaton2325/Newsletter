@@ -34,6 +34,21 @@ class Group(db.Model):
     name = db.Column(db.String(64), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     
+    # New payment fields
+    is_paid = db.Column(db.Boolean, default=False)
+    price = db.Column(db.Float, default=0.0)
+    currency = db.Column(db.String(3), default='eur')
+    stripe_price_id = db.Column(db.String(128))
+    description = db.Column(db.Text)
+    
+    # New: Customizable welcome email
+    welcome_email_subject = db.Column(db.String(128))
+    welcome_email_body = db.Column(db.Text)
+    
+    # New: Link a specific SMTP config to this group
+    smtp_config_id = db.Column(db.Integer, db.ForeignKey('smtp_configs.id'), nullable=True)
+    smtp_config = db.relationship('SMTPConfig', backref='associated_groups')
+    
     contacts = db.relationship('Contact', secondary=contacts_groups, backref=db.backref('groups', lazy='dynamic'))
 
     def __repr__(self):

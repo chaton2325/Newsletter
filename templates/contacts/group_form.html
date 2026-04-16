@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white">
+                <h5 class="m-0 fw-bold">{{ title }}</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        {{ form.name.label(class="form-label") }}
+                        {{ form.name(class="form-control", placeholder="Nom du groupe") }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.description.label(class="form-label") }}
+                        {{ form.description(class="form-control", rows=3, placeholder="Description de la newsletter...") }}
+                    </div>
+
+                    <div class="card bg-light mb-3 border-0">
+                        <div class="card-body">
+                            <h6 class="fw-bold mb-3"><i class="bi bi-envelope-paper me-2"></i>Email de bienvenue</h6>
+                            <div class="mb-3">
+                                {{ form.welcome_email_subject.label(class="form-label small") }}
+                                {{ form.welcome_email_subject(class="form-control form-control-sm", placeholder="Ex: Bienvenue dans notre newsletter !") }}
+                            </div>
+                            <div class="mb-3">
+                                {{ form.welcome_email_body.label(class="form-label small") }}
+                                {{ form.welcome_email_body(class="form-control form-control-sm", rows=5, placeholder="Contenu HTML de votre email...", id="email_body") }}
+                            </div>
+                            
+                            <!-- Preview Section -->
+                            <div class="mb-0">
+                                <label class="form-label small fw-bold text-primary"><i class="bi bi-eye me-1"></i> Prévisualisation de l'email</label>
+                                <div id="email_preview" class="border rounded bg-white p-3" style="min-height: 150px; overflow-y: auto; font-family: sans-serif;">
+                                    <span class="text-muted small">Le rendu de votre email apparaîtra ici...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3 form-check">
+                        {{ form.is_paid(class="form-check-input", id="is_paid") }}
+                        {{ form.is_paid.label(class="form-check-label") }}
+                    </div>
+                    
+                    <div id="payment-fields" style="display: {% if form.is_paid.data %}block{% else %}none{% endif %};">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                {{ form.price.label(class="form-label") }}
+                                {{ form.price(class="form-control", placeholder="0.00") }}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                {{ form.currency.label(class="form-label") }}
+                                {{ form.currency(class="form-select") }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.smtp_config_id.label(class="form-label") }}
+                        {{ form.smtp_config_id(class="form-select") }}
+                        <small class="text-muted">L'email utilisé pour envoyer les confirmations de ce groupe.</small>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        {{ form.submit(class="btn btn-primary rounded-pill") }}
+                        <a href="{{ url_for('contacts.list_contacts') }}" class="btn btn-outline-secondary rounded-pill">Annuler</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('is_paid').addEventListener('change', function() {
+        document.getElementById('payment-fields').style.display = this.checked ? 'block' : 'none';
+    });
+
+    // Email Body Live Preview
+    const emailBody = document.getElementById('email_body');
+    const emailPreview = document.getElementById('email_preview');
+
+    function updatePreview() {
+        const content = emailBody.value.trim();
+        if (content) {
+            emailPreview.innerHTML = content;
+        } else {
+            emailPreview.innerHTML = '<span class="text-muted small">Le rendu de votre email apparaîtra ici...</span>';
+        }
+    }
+
+    emailBody.addEventListener('input', updatePreview);
+    
+    // Initial update if editing existing group
+    window.addEventListener('load', updatePreview);
+</script>
+{% endblock %}

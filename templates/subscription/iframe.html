@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ t.title }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        body { background-color: transparent; padding: 0; margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
+        .form-container { max-width: 100%; margin: 0; background: transparent; padding: 10px; border-radius: 0; box-shadow: none; }
+        .group-card { 
+            background: white;
+            border: 2px solid #f0f0f0; 
+            border-radius: 10px; 
+            padding: 12px; 
+            margin-bottom: 12px; 
+            transition: all 0.2s ease;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+        }
+        .group-card:hover { border-color: #0d6efd; background-color: #f8fbff; }
+        .group-card input[type="checkbox"] { scale: 1.2; margin-top: 5px; }
+        .description-box { 
+            background: #fff9db; 
+            border-left: 4px solid #fcc419; 
+            padding: 10px 15px; 
+            margin-top: 10px; 
+            font-size: 0.92rem; 
+            color: #333;
+            border-radius: 0 8px 8px 0;
+            display: block;
+            white-space: pre-wrap;
+            line-height: 1.5;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.02);
+        }
+        .price-tag { font-weight: bold; color: #2b8a3e; }
+    </style>
+</head>
+<body>
+    <div class="form-container" id="iframe-content">
+        {% if success %}
+            <div class="text-center py-4">
+                <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+                <h4 class="mt-3">{{ t.success }}</h4>
+                <p class="text-muted">{{ t.success_msg }}</p>
+            </div>
+        {% else %}
+            <h5 class="fw-bold mb-4 text-center">{{ t.title }}</h5>
+            <form method="POST">
+                {{ form.hidden_tag() }}
+                <div class="row">
+                    <div class="col-6 mb-3">
+                        <label class="form-label small fw-bold">{{ t.first_name }}</label>
+                        {{ form.first_name(class="form-control form-control-sm", placeholder=t.first_name) }}
+                    </div>
+                    <div class="col-6 mb-3">
+                        <label class="form-label small fw-bold">{{ t.last_name }}</label>
+                        {{ form.last_name(class="form-control form-control-sm", placeholder=t.last_name) }}
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label small fw-bold">{{ t.email }}</label>
+                    {{ form.email(class="form-control", placeholder="email@example.com") }}
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label small fw-bold mb-3"><i class="bi bi-star-fill text-warning me-1"></i> {{ t.choose }}</label>
+                    <div class="groups-list">
+                        {% for subfield in form.groups %}
+                            {% set group_id = subfield.data | int %}
+                            {% set group = user.groups.filter_by(id=group_id).first() %}
+                            <label class="group-card d-flex align-items-start w-100">
+                                <div class="me-3 pt-1">{{ subfield(class="form-check-input") }}</div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between">
+                                        <span class="fw-bold">{{ group.name }}</span>
+                                        {% if group.is_paid %}
+                                            <span class="price-tag">{{ group.price }}{{ group.currency.upper() }}</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if group and group.description %}
+                                        <div class="description-box"><i class="bi bi-info-circle-fill me-1"></i> {{ group.description }}</div>
+                                    {% endif %}
+                                </div>
+                            </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary btn-lg shadow-sm">
+                        <i class="bi bi-envelope-check me-2"></i> {{ t.subscribe }}
+                    </button>
+                </div>
+            </form>
+        {% endif %}
+    </div>
+
+    <script>
+        function sendHeight() {
+            const content = document.getElementById('iframe-content');
+            if (!content) return;
+            
+            // Calcul plus robuste incluant padding et marges
+            const height = content.getBoundingClientRect().height + 40; // +40px de sécurité
+            
+            window.parent.postMessage({ 
+                'type': 'resize-iframe', 
+                'height': height 
+            }, '*');
+        }
+
+        // Déclencheurs multiples
+        window.addEventListener('load', sendHeight);
+        window.addEventListener('resize', sendHeight);
+        
+        if (window.ResizeObserver) {
+            new ResizeObserver(sendHeight).observe(document.body);
+        }
+
+        // Polling de sécurité
+        setInterval(sendHeight, 1500);
+    </script>
+</body>
+</html>

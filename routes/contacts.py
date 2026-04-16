@@ -1,10 +1,11 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from models.contact import Contact, Group
+from models.smtp import SMTPConfig
 from __init__ import db
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField, SelectMultipleField
-from wtforms.validators import DataRequired, Email, Optional
+from wtforms import StringField, SubmitField, SelectMultipleField, BooleanField, FloatField, SelectField, TextAreaField
+from wtforms.validators import DataRequired, Email, Optional, NumberRange
 
 contacts = Blueprint('contacts', __name__)
 
@@ -18,7 +19,17 @@ class ContactForm(FlaskForm):
 
 class GroupForm(FlaskForm):
     name = StringField('Nom du groupe', validators=[DataRequired()])
-    submit = SubmitField('Créer le groupe')
+    description = TextAreaField('Description', validators=[Optional()])
+    
+    # Email customization
+    welcome_email_subject = StringField('Sujet de l\'email de bienvenue', validators=[Optional()])
+    welcome_email_body = TextAreaField('Contenu de l\'email (HTML autorisé)', validators=[Optional()])
+    
+    is_paid = BooleanField('Newsletter Payante')
+    price = FloatField('Prix mensuel', validators=[Optional(), NumberRange(min=0)])
+    currency = SelectField('Devise', choices=[('eur', 'EUR'), ('usd', 'USD')], default='eur')
+    smtp_config_id = SelectField('Email SMTP de notification', coerce=int, validators=[Optional()])
+    submit = SubmitField('Enregistrer le groupe')
 
 @contacts.route('/')
 @login_required
@@ -92,13 +103,55 @@ def delete_contact(id):
 @contacts.route('/groups/add', methods=['POST'])
 @login_required
 def add_group():
-    form = GroupForm()
-    if form.validate_on_submit():
-        group = Group(name=form.name.data, user_id=current_user.id)
+    name = request.form.get('name')
+    if name:
+        group = Group(
+            name=name,
+            user_id=current_user.id,
+            is_paid=False,
+            price=0.0,
+            currency='eur'
+        )
         db.session.add(group)
         db.session.commit()
-        flash(f'Groupe "{group.name}" créé.', 'success')
+        flash(f'Groupe "{name}" créé. Cliquez sur modifier pour personnaliser l\'email de bienvenue.', 'success')
+    else:
+        flash("Le nom du groupe est requis.", "danger")
     return redirect(url_for('contacts.list_contacts'))
+
+@contacts.route('/groups/edit/<int:id>', methods=['GET', 'POST'])
+@login_required
+def edit_group(id):
+    group = Group.query.filter_by(id=id, user_id=current_user.id).first_or_404()
+    form = GroupForm()
+    
+    user_smtps = SMTPConfig.query.filter_by(user_id=current_user.id).all()
+    form.smtp_config_id.choices = [(0, 'Défaut (Premier SMTP)')] + [(s.id, f"{s.alias} ({s.email})") for s in user_smtps]
+
+    if form.validate_on_submit():
+        group.name = form.name.data
+        group.description = form.description.data
+        group.welcome_email_subject = form.welcome_email_subject.data
+        group.welcome_email_body = form.welcome_email_body.data
+        group.is_paid = form.is_paid.data
+        group.price = form.price.data if form.is_paid.data else 0.0
+        group.currency = form.currency.data if form.is_paid.data else 'eur'
+        sid = form.smtp_config_id.data
+        group.smtp_config_id = sid if (sid and sid > 0) else None
+        
+        db.session.commit()
+        flash(f'Groupe "{group.name}" mis à jour.', 'success')
+        return redirect(url_for('contacts.list_contacts'))
+    elif request.method == 'GET':
+        form.name.data = group.name
+        form.description.data = group.description
+        form.welcome_email_subject.data = group.welcome_email_subject
+        form.welcome_email_body.data = group.welcome_email_body
+        form.is_paid.data = group.is_paid
+        form.price.data = group.price
+        form.currency.data = group.currency
+        form.smtp_config_id.data = group.smtp_config_id or 0
+    return render_template('contacts/group_form.html', form=form, title='Modifier le groupe', group=group)
 
 @contacts.route('/groups/delete/<int:id>')
 @login_required
