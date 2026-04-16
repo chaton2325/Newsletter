@@ -1,5 +1,5 @@
 import stripe
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify, make_response
 from models.contact import Contact, Group, Subscription
 from models.user import User
 from models.smtp import SMTPConfig
@@ -52,10 +52,16 @@ class PublicSubscribeForm(FlaskForm):
     groups = MultiCheckboxField('Groups', coerce=int)
     submit = SubmitField('Subscribe')
 
+# Route modifiée pour accepter l'ID de groupe dans le chemin
 @subscription.route('/iframe/<int:user_id>', methods=['GET', 'POST'])
-def iframe_subscribe(user_id):
+@subscription.route('/iframe/<int:user_id>/<int:group_id>', methods=['GET', 'POST'])
+def iframe_subscribe(user_id, group_id=None):
     user = User.query.get_or_404(user_id)
-    group_id = request.args.get('group_id', type=int)
+    
+    # On vérifie aussi le paramètre d'URL pour la rétro-compatibilité
+    if not group_id:
+        group_id = request.args.get('group_id', type=int)
+        
     lang = request.args.get('lang', 'en')
     if lang not in TRANSLATIONS: lang = 'en'
     t = TRANSLATIONS[lang]
@@ -122,11 +128,20 @@ def iframe_subscribe(user_id):
                 customer_email=email,
                 metadata={'contact_id': contact.id, 'group_ids': ','.join([str(g.id) for g in paid_groups])}
             )
-            return render_template('subscription/iframe_redirect.html', url=url_for('subscription.pay', session_id=checkout_session.id, lang=lang))
+            resp = make_response(render_template('subscription/iframe_redirect.html', url=url_for('subscription.pay', session_id=checkout_session.id, lang=lang)))
+            resp.headers['X-Frame-Options'] = 'ALLOWALL'
+            resp.headers['Content-Security-Policy'] = "frame-ancestors *"
+            return resp
         
-        return render_template('subscription/iframe.html', form=form, user=user, success=True, t=t)
+        resp = make_response(render_template('subscription/iframe.html', form=form, user=user, success=True, t=t))
+        resp.headers['X-Frame-Options'] = 'ALLOWALL'
+        resp.headers['Content-Security-Policy'] = "frame-ancestors *"
+        return resp
         
-    return render_template('subscription/iframe.html', form=form, user=user, t=t, lang=lang)
+    resp = make_response(render_template('subscription/iframe.html', form=form, user=user, t=t, lang=lang))
+    resp.headers['X-Frame-Options'] = 'ALLOWALL'
+    resp.headers['Content-Security-Policy'] = "frame-ancestors *"
+    return resp
 
 @subscription.route('/pay/<session_id>')
 def pay(session_id):
@@ -184,8 +199,6 @@ def success():
         print(f"Stripe Error: {e}")
     return render_template('subscription/success_page.html', t=t)
 
-# --- Unsubscribe Logic ---
-
 def generate_unsubscribe_link(contact_id, group_id):
     s = URLSafeSerializer(current_app.config['SECRET_KEY'])
     token = s.dumps({'c': contact_id, 'g': group_id})
@@ -210,7 +223,6 @@ def unsubscribe(token):
         stripe.api_key = current_app.config['STRIPE_SECRET_KEY']
         
         if group_id > 0:
-            # Unsubscribe from specific group
             sub = Subscription.query.get((contact_id, group_id))
             if sub:
                 if sub.stripe_subscription_id:
@@ -218,21 +230,16 @@ def unsubscribe(token):
                         stripe.Subscription.delete(sub.stripe_subscription_id)
                     except Exception as e:
                         print(f"Stripe Cancel Error: {e}")
-                    # Delete contact entirely if paid group (as requested)
                     db.session.delete(contact)
                 else:
-                    # Free group: just remove subscription
                     db.session.delete(sub)
         else:
-            # Global unsubscribe (group_id == 0)
-            # 1. Cancel ALL Stripe subscriptions for this contact
             for sub in contact.subscriptions:
                 if sub.stripe_subscription_id:
                     try:
                         stripe.Subscription.delete(sub.stripe_subscription_id)
                     except Exception as e:
                         print(f"Stripe Global Cancel Error: {e}")
-            # 2. Delete contact entirely
             db.session.delete(contact)
         
         db.session.commit()
