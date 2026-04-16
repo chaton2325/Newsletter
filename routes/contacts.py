@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
-from models.contact import Contact, Group
+from models.contact import Contact, Group, Subscription
 from models.smtp import SMTPConfig
 from __init__ import db
 from flask_wtf import FlaskForm
@@ -20,11 +20,8 @@ class ContactForm(FlaskForm):
 class GroupForm(FlaskForm):
     name = StringField('Nom du groupe', validators=[DataRequired()])
     description = TextAreaField('Description', validators=[Optional()])
-    
-    # Email customization
     welcome_email_subject = StringField('Sujet de l\'email de bienvenue', validators=[Optional()])
     welcome_email_body = TextAreaField('Contenu de l\'email (HTML autorisé)', validators=[Optional()])
-    
     is_paid = BooleanField('Newsletter Payante')
     price = FloatField('Prix mensuel', validators=[Optional(), NumberRange(min=0)])
     currency = SelectField('Devise', choices=[('eur', 'EUR'), ('usd', 'USD')], default='eur')
@@ -53,9 +50,14 @@ def add_contact():
             email=form.email.data,
             phone=form.phone.data
         )
-        if form.groups.data:
-            contact.groups = [Group.query.get(gid) for gid in form.groups.data]
         db.session.add(contact)
+        db.session.flush() # Get ID
+        
+        if form.groups.data:
+            for gid in form.groups.data:
+                sub = Subscription(contact_id=contact.id, group_id=gid)
+                db.session.add(sub)
+        
         db.session.commit()
         flash('Contact ajouté avec succès.', 'success')
         return redirect(url_for('contacts.list_contacts'))
@@ -75,7 +77,14 @@ def edit_contact(id):
         contact.last_name = form.last_name.data
         contact.email = form.email.data
         contact.phone = form.phone.data
-        contact.groups = [Group.query.get(gid) for gid in form.groups.data]
+        
+        # Update subscriptions
+        Subscription.query.filter_by(contact_id=contact.id).delete()
+        if form.groups.data:
+            for gid in form.groups.data:
+                sub = Subscription(contact_id=contact.id, group_id=gid)
+                db.session.add(sub)
+                
         db.session.commit()
         flash('Contact mis à jour.', 'success')
         return redirect(url_for('contacts.list_contacts'))
@@ -85,7 +94,7 @@ def edit_contact(id):
         form.last_name.data = contact.last_name
         form.email.data = contact.email
         form.phone.data = contact.phone
-        form.groups.data = [g.id for g in contact.groups]
+        form.groups.data = [s.group_id for s in contact.subscriptions]
         
     return render_template('contacts/contact_form.html', form=form, title='Modifier le contact', contact=contact)
 
@@ -105,16 +114,10 @@ def delete_contact(id):
 def add_group():
     name = request.form.get('name')
     if name:
-        group = Group(
-            name=name,
-            user_id=current_user.id,
-            is_paid=False,
-            price=0.0,
-            currency='eur'
-        )
+        group = Group(name=name, user_id=current_user.id, is_paid=False, price=0.0, currency='eur')
         db.session.add(group)
         db.session.commit()
-        flash(f'Groupe "{name}" créé. Cliquez sur modifier pour personnaliser l\'email de bienvenue.', 'success')
+        flash(f'Groupe "{name}" créé.', 'success')
     else:
         flash("Le nom du groupe est requis.", "danger")
     return redirect(url_for('contacts.list_contacts'))
@@ -124,9 +127,8 @@ def add_group():
 def edit_group(id):
     group = Group.query.filter_by(id=id, user_id=current_user.id).first_or_404()
     form = GroupForm()
-    
     user_smtps = SMTPConfig.query.filter_by(user_id=current_user.id).all()
-    form.smtp_config_id.choices = [(0, 'Défaut (Premier SMTP)')] + [(s.id, f"{s.alias} ({s.email})") for s in user_smtps]
+    form.smtp_config_id.choices = [(0, 'Défaut')] + [(s.id, f"{s.alias} ({s.email})") for s in user_smtps]
 
     if form.validate_on_submit():
         group.name = form.name.data
@@ -138,7 +140,6 @@ def edit_group(id):
         group.currency = form.currency.data if form.is_paid.data else 'eur'
         sid = form.smtp_config_id.data
         group.smtp_config_id = sid if (sid and sid > 0) else None
-        
         db.session.commit()
         flash(f'Groupe "{group.name}" mis à jour.', 'success')
         return redirect(url_for('contacts.list_contacts'))

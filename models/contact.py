@@ -1,10 +1,5 @@
 from __init__ import db
-
-# Association Table for Many-to-Many relationship between Contacts and Groups
-contacts_groups = db.Table('contacts_groups',
-    db.Column('contact_id', db.Integer, db.ForeignKey('contacts.id'), primary_key=True),
-    db.Column('group_id', db.Integer, db.ForeignKey('groups.id'), primary_key=True)
-)
+from datetime import datetime
 
 class Contact(db.Model):
     __tablename__ = 'contacts'
@@ -17,8 +12,8 @@ class Contact(db.Model):
     phone = db.Column(db.String(20))
     tags = db.Column(db.String(128)) 
     
-    # Relationship to groups
-    # 'groups' is handled by backref in Group model
+    # Relationships
+    subscriptions = db.relationship('Subscription', back_populates='contact', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Contact {self.email}>'
@@ -34,22 +29,34 @@ class Group(db.Model):
     name = db.Column(db.String(64), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     
-    # New payment fields
     is_paid = db.Column(db.Boolean, default=False)
     price = db.Column(db.Float, default=0.0)
     currency = db.Column(db.String(3), default='eur')
     stripe_price_id = db.Column(db.String(128))
     description = db.Column(db.Text)
     
-    # New: Customizable welcome email
     welcome_email_subject = db.Column(db.String(128))
     welcome_email_body = db.Column(db.Text)
     
-    # New: Link a specific SMTP config to this group
     smtp_config_id = db.Column(db.Integer, db.ForeignKey('smtp_configs.id'), nullable=True)
-    smtp_config = db.relationship('SMTPConfig', backref='associated_groups')
+    smtp_config = db.relationship('SMTPConfig')
     
-    contacts = db.relationship('Contact', secondary=contacts_groups, backref=db.backref('groups', lazy='dynamic'))
+    # Relationships
+    subscriptions = db.relationship('Subscription', back_populates='group', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Group {self.name}>'
+
+class Subscription(db.Model):
+    __tablename__ = 'subscriptions'
+    
+    contact_id = db.Column(db.Integer, db.ForeignKey('contacts.id'), primary_key=True)
+    group_id = db.Column(db.Integer, db.ForeignKey('groups.id'), primary_key=True)
+    
+    # Metadata
+    subscribed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    stripe_subscription_id = db.Column(db.String(128)) # ID de l'abonnement Stripe pour annulation
+    
+    # Back-relationships
+    contact = db.relationship('Contact', back_populates='subscriptions')
+    group = db.relationship('Group', back_populates='subscriptions')

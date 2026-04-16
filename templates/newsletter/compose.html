@@ -18,7 +18,7 @@
                         <div class="col-md-8">
                             <div class="mb-3">
                                 <label class="form-label fw-bold small text-uppercase">Objet de l'email</label>
-                                {{ form.subject(class="form-control form-control-lg", placeholder="Ex: Notre nouvelle collection est disponible !") }}
+                                {{ form.subject(class="form-control form-control-lg", placeholder="Ex: Notre nouvelle collection est disponible !", id="subject") }}
                             </div>
                             
                             <div class="mb-3">
@@ -26,7 +26,7 @@
                                 <!-- Le textarea original pour Summernote -->
                                 {{ form.content(id="summernote") }}
                                 <div class="form-text mt-2">
-                                    <i class="bi bi-info-circle me-1"></i> Cliquez sur une image pour la <strong>redimensionner</strong> directement.
+                                    <i class="bi bi-info-circle me-1"></i> Un lien de désabonnement sera automatiquement ajouté en bas de chaque email.
                                 </div>
                             </div>
                         </div>
@@ -42,13 +42,14 @@
                                     <h6 class="fw-bold mb-3 small text-uppercase">Destinataires</h6>
                                     
                                     <div class="mb-3">
-                                        <label class="form-label small">Par Groupes</label>
+                                        <label class="form-label small">Envoyer aux Groupes</label>
                                         {{ form.group_recipients(class="form-select", size="5") }}
                                     </div>
 
                                     <div class="mb-3">
-                                        <label class="form-label small">Par Contacts Individuels</label>
-                                        {{ form.recipients(class="form-select", size="8") }}
+                                        <label class="form-label small">Contacts Individuels</label>
+                                        {{ form.recipients(class="form-select", size="5") }}
+                                        <div class="form-text small">Maintenez Ctrl pour choix multiple.</div>
                                     </div>
                                     
                                     <div class="mb-3">
@@ -114,7 +115,6 @@
                 ['insert', ['link', 'picture', 'video']],
                 ['view', ['fullscreen', 'codeview', 'help']]
             ],
-            // Configuration de l'upload d'images vers notre serveur
             callbacks: {
                 onImageUpload: function(files) {
                     uploadImage(files[0]);
@@ -122,7 +122,6 @@
             }
         });
 
-        // Fonction d'upload AJAX vers Flask
         function uploadImage(file) {
             let data = new FormData();
             data.append("upload", file);
@@ -142,12 +141,10 @@
                 },
                 error: function(data) {
                     console.error("Erreur upload image:", data);
-                    alert("Erreur lors du téléchargement de l'image.");
                 }
             });
         }
 
-        // Prévisualisation
         $('#previewBtn').on('click', function() {
             const subject = $('#subject').val();
             const content = $('#summernote').summernote('code');
@@ -155,7 +152,6 @@
             $('#previewSubject').text(subject || "Sans objet");
             $('#previewContent').html(content || "<p class='text-muted'>Aucun contenu.</p>");
             
-            // Appliquer dynamiquement le style aux images de la preview
             $('#previewContent img').css({
                 'max-width': '100%',
                 'height': 'auto'
@@ -168,7 +164,6 @@
 </script>
 
 <style>
-    /* Correction du style pour que les images ne dépassent pas */
     .note-editable img {
         max-width: 100% !important;
         height: auto !important;

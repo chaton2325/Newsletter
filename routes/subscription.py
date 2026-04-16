@@ -1,6 +1,6 @@
 import stripe
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
-from models.contact import Contact, Group
+from models.contact import Contact, Group, Subscription
 from models.user import User
 from models.smtp import SMTPConfig
 from services.mail_service import MailService
@@ -8,10 +8,10 @@ from __init__ import db, csrf
 from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField, SelectMultipleField, HiddenField, widgets
 from wtforms.validators import DataRequired, Email, Optional
+from itsdangerous import URLSafeSerializer
 
 subscription = Blueprint('subscription', __name__)
 
-# Traducteur simple
 TRANSLATIONS = {
     'en': {
         'title': 'Join our Newsletter',
@@ -22,7 +22,9 @@ TRANSLATIONS = {
         'subscribe': 'Subscribe Now',
         'success': 'Subscription successful!',
         'success_msg': 'Thank you for your trust.',
-        'per_month': '/month'
+        'per_month': '/month',
+        'unsubscribe_success': 'You have been unsubscribed.',
+        'unsubscribe_confirm': 'Are you sure you want to unsubscribe?'
     },
     'fr': {
         'title': 'Rejoignez notre Newsletter',
@@ -33,7 +35,9 @@ TRANSLATIONS = {
         'subscribe': 'S\'abonner maintenant',
         'success': 'Inscription réussie !',
         'success_msg': 'Merci de votre confiance.',
-        'per_month': '/mois'
+        'per_month': '/mois',
+        'unsubscribe_success': 'Vous avez été désabonné avec succès.',
+        'unsubscribe_confirm': 'Voulez-vous vraiment vous désabonner ?'
     }
 }
 
@@ -52,13 +56,11 @@ class PublicSubscribeForm(FlaskForm):
 def iframe_subscribe(user_id):
     user = User.query.get_or_404(user_id)
     group_id = request.args.get('group_id', type=int)
-    lang = request.args.get('lang', 'en') # 'en' par défaut
+    lang = request.args.get('lang', 'en')
     if lang not in TRANSLATIONS: lang = 'en'
-    
     t = TRANSLATIONS[lang]
     form = PublicSubscribeForm()
     
-    # Mise à jour des labels selon la langue
     form.first_name.label.text = t['first_name']
     form.last_name.label.text = t['last_name']
     form.email.label.text = t['email']
@@ -88,13 +90,16 @@ def iframe_subscribe(user_id):
         free_groups = [g for g in selected_groups if not g.is_paid]
         
         for g in free_groups:
-            if g not in contact.groups:
-                contact.groups.append(g)
+            sub = Subscription.query.filter_by(contact_id=contact.id, group_id=g.id).first()
+            if not sub:
+                sub = Subscription(contact_id=contact.id, group_id=g.id)
+                db.session.add(sub)
                 smtp_to_use = g.smtp_config or user.smtp_configs.first()
                 if smtp_to_use:
-                    # Envoi de l'email personnalisé
                     subject = g.welcome_email_subject or f"Welcome to {g.name}"
                     body = g.welcome_email_body or f"<h2>Thank you!</h2><p>You are subscribed to {g.name}.</p>"
+                    unsub_url = generate_unsubscribe_link(contact.id, g.id)
+                    body += f'<br><br><a href="{unsub_url}" style="color: #999; font-size: 12px;">Unsubscribe / Se désabonner</a>'
                     MailService.send_email(user, smtp_to_use, subject, body, [email])
 
         db.session.commit()
@@ -133,7 +138,7 @@ def pay(session_id):
         group_ids = session.metadata.get('group_ids', '').split(',')
         groups = [Group.query.get(int(gid)) for gid in group_ids if gid]
         return render_template('subscription/pay.html', session=session, groups=groups, t=t)
-    except Exception as e:
+    except Exception:
         return redirect(url_for('main.index'))
 
 @subscription.route('/success')
@@ -146,7 +151,7 @@ def success():
 
     stripe.api_key = current_app.config['STRIPE_SECRET_KEY']
     try:
-        session = stripe.checkout.Session.retrieve(session_id)
+        session = stripe.checkout.Session.retrieve(session_id, expand=['subscription'])
         if session.payment_status == 'paid':
             contact_id = session.metadata.get('contact_id')
             group_ids = session.metadata.get('group_ids', '').split(',')
@@ -157,16 +162,80 @@ def success():
                 for gid in group_ids:
                     if gid:
                         group = Group.query.get(int(gid))
-                        if group and group not in contact.groups:
-                            contact.groups.append(group)
+                        sub = Subscription.query.filter_by(contact_id=contact.id, group_id=group.id).first()
+                        if not sub:
+                            sub = Subscription(
+                                contact_id=contact.id, 
+                                group_id=group.id, 
+                                stripe_subscription_id=session.subscription.id if session.subscription else None
+                            )
+                            db.session.add(sub)
                             paid_groups_added.append(group)
                             smtp_to_use = group.smtp_config or user.smtp_configs.first()
                             if smtp_to_use:
                                 subject = group.welcome_email_subject or f"Payment confirmed - {group.name}"
-                                body = group.welcome_email_body or f"<p>Abonnement actif pour {group.name}</p>"
+                                body = group.welcome_email_body or f"<p>Subscription active for {group.name}</p>"
+                                unsub_url = generate_unsubscribe_link(contact.id, group.id)
+                                body += f'<br><br><a href="{unsub_url}" style="color: #999; font-size: 12px;">Unsubscribe / Se désabonner</a>'
                                 MailService.send_email(user, smtp_to_use, subject, body, [contact.email])
                 db.session.commit()
                 return render_template('subscription/success_page.html', paid=True, groups=paid_groups_added, t=t)
     except Exception as e:
-        print(f"Erreur Stripe: {e}")
+        print(f"Stripe Error: {e}")
     return render_template('subscription/success_page.html', t=t)
+
+# --- Unsubscribe Logic ---
+
+def generate_unsubscribe_link(contact_id, group_id):
+    s = URLSafeSerializer(current_app.config['SECRET_KEY'])
+    token = s.dumps({'c': contact_id, 'g': group_id})
+    return url_for('subscription.unsubscribe', token=token, _external=True)
+
+@subscription.route('/unsubscribe/<token>', methods=['GET', 'POST'])
+def unsubscribe(token):
+    s = URLSafeSerializer(current_app.config['SECRET_KEY'])
+    try:
+        data = s.loads(token)
+        contact_id = data['c']
+        group_id = data['g']
+    except Exception:
+        return "Invalid Link", 400
+
+    contact = Contact.query.get_or_404(contact_id)
+    group = None
+    if group_id > 0:
+        group = Group.query.get(group_id)
+    
+    if request.method == 'POST':
+        stripe.api_key = current_app.config['STRIPE_SECRET_KEY']
+        
+        if group_id > 0:
+            # Unsubscribe from specific group
+            sub = Subscription.query.get((contact_id, group_id))
+            if sub:
+                if sub.stripe_subscription_id:
+                    try:
+                        stripe.Subscription.delete(sub.stripe_subscription_id)
+                    except Exception as e:
+                        print(f"Stripe Cancel Error: {e}")
+                    # Delete contact entirely if paid group (as requested)
+                    db.session.delete(contact)
+                else:
+                    # Free group: just remove subscription
+                    db.session.delete(sub)
+        else:
+            # Global unsubscribe (group_id == 0)
+            # 1. Cancel ALL Stripe subscriptions for this contact
+            for sub in contact.subscriptions:
+                if sub.stripe_subscription_id:
+                    try:
+                        stripe.Subscription.delete(sub.stripe_subscription_id)
+                    except Exception as e:
+                        print(f"Stripe Global Cancel Error: {e}")
+            # 2. Delete contact entirely
+            db.session.delete(contact)
+        
+        db.session.commit()
+        return render_template('subscription/unsubscribe_result.html', success=True)
+
+    return render_template('subscription/unsubscribe_result.html', group=group)
