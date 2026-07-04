@@ -13,7 +13,11 @@ class User(db.Model, UserMixin):
     username = db.Column(db.String(64), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(128), nullable=False)
     role = db.Column(db.String(20), default='user') # 'superadmin' or 'user'
-    
+
+    # Telegram bot linking
+    telegram_chat_id = db.Column(db.String(64), unique=True, nullable=True, index=True)
+    telegram_link_code = db.Column(db.String(32), unique=True, nullable=True)
+
     # Relationships
     smtp_configs = db.relationship('SMTPConfig', backref='user', lazy='dynamic', cascade='all, delete-orphan')
     contacts = db.relationship('Contact', backref='owner', lazy='dynamic', cascade='all, delete-orphan')

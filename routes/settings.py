@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, current_app
 from flask_login import login_required, current_user
 from models.smtp import SMTPConfig
 from services.mail_service import MailService
@@ -6,6 +6,7 @@ from __init__ import db
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, IntegerField, BooleanField, SubmitField
 from wtforms.validators import DataRequired, Email, NumberRange
+import secrets
 
 settings = Blueprint('settings', __name__)
 
@@ -97,3 +98,33 @@ def delete_smtp(id):
     db.session.commit()
     flash('Configuration SMTP supprimée.', 'info')
     return redirect(url_for('settings.list_smtp'))
+
+
+@settings.route('/telegram')
+@login_required
+def telegram():
+    bot_username = current_app.config.get('TELEGRAM_BOT_USERNAME')
+    return render_template(
+        'settings/telegram.html',
+        title='Bot Telegram',
+        bot_username=bot_username
+    )
+
+
+@settings.route('/telegram/generate_code', methods=['POST'])
+@login_required
+def telegram_generate_code():
+    current_user.telegram_link_code = secrets.token_hex(4)
+    db.session.commit()
+    flash('Nouveau code de liaison généré.', 'success')
+    return redirect(url_for('settings.telegram'))
+
+
+@settings.route('/telegram/unlink', methods=['POST'])
+@login_required
+def telegram_unlink():
+    current_user.telegram_chat_id = None
+    current_user.telegram_link_code = None
+    db.session.commit()
+    flash('Compte Telegram délié.', 'info')
+    return redirect(url_for('settings.telegram'))

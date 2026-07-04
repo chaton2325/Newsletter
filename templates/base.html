@@ -27,10 +27,13 @@
             <a class="nav-link {{ 'active' if 'contacts' in request.endpoint }}" href="{{ url_for('contacts.list_contacts') }}">
                 <i class="bi bi-person-lines-fill me-2"></i> Contacts
             </a>
-            <a class="nav-link {{ 'active' if 'settings' in request.endpoint }}" href="{{ url_for('settings.list_smtp') }}">
+            <a class="nav-link {{ 'active' if 'settings' in request.endpoint and 'telegram' not in request.endpoint }}" href="{{ url_for('settings.list_smtp') }}">
                 <i class="bi bi-gear me-2"></i> Paramètres SMTP
             </a>
-            
+            <a class="nav-link {{ 'active' if 'telegram' in request.endpoint }}" href="{{ url_for('settings.telegram') }}">
+                <i class="bi bi-telegram me-2"></i> Bot Telegram
+            </a>
+
             {% if current_user.role == 'superadmin' %}
             <div class="px-4 py-3 text-uppercase small fw-bold text-muted" style="font-size: 0.65rem; letter-spacing: 1px;">Administration</div>
             <a class="nav-link {{ 'active' if 'admin' in request.endpoint }}" href="{{ url_for('admin.list_users') }}">

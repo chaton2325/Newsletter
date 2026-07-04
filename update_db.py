@@ -54,6 +54,39 @@ def update_database():
     except sqlite3.OperationalError:
         print("Aucune donnée ancienne à migrer dans 'contacts_groups'.")
 
+    # 4. Colonnes Telegram sur la table 'users'
+    columns_users = [
+        ("telegram_chat_id", "VARCHAR(64)"),
+        ("telegram_link_code", "VARCHAR(32)")
+    ]
+    for col_name, col_type in columns_users:
+        try:
+            cursor.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}")
+            print(f"Users: Colonne '{col_name}' ajoutée.")
+        except sqlite3.OperationalError:
+            pass
+
+    # 5. Table 'telegram_drafts' (brouillons générés via le bot Telegram)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS telegram_drafts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            chat_id VARCHAR(64) NOT NULL,
+            subject VARCHAR(256),
+            content TEXT,
+            prompt TEXT,
+            preview_token VARCHAR(64) NOT NULL UNIQUE,
+            smtp_config_id INTEGER,
+            group_ids VARCHAR(256) DEFAULT '',
+            contact_ids VARCHAR(256) DEFAULT '',
+            status VARCHAR(20) DEFAULT 'draft',
+            created_at DATETIME,
+            FOREIGN KEY(user_id) REFERENCES users(id),
+            FOREIGN KEY(smtp_config_id) REFERENCES smtp_configs(id)
+        )
+    ''')
+    print("Table 'telegram_drafts' créée ou déjà présente.")
+
     conn.commit()
     conn.close()
     print("Mise à jour de la base de données terminée avec succès.")

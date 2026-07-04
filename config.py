@@ -35,3 +35,14 @@ class Config:
     STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
     STRIPE_PUBLIC_KEY = os.environ.get('STRIPE_PUBLIC_KEY')
     STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
+
+    # Telegram bot configuration
+    TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+    TELEGRAM_BOT_USERNAME = os.environ.get('TELEGRAM_BOT_USERNAME')
+
+    # Mistral AI configuration (HTML content generation)
+    MISTRAL_API_KEY = os.environ.get('MISTRAL_API_KEY')
+    MISTRAL_MODEL = os.environ.get('MISTRAL_MODEL') or 'mistral-large-latest'
+
+    # Public base URL used by the Telegram bot to build preview links
+    SITE_BASE_URL = os.environ.get('SITE_BASE_URL') or 'http://127.0.0.1:9060'

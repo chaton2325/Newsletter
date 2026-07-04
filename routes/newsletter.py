@@ -1,8 +1,9 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, jsonify
+from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, jsonify, abort
 from flask_login import login_required, current_user
 from models.contact import Contact, Group, Subscription
 from models.smtp import SMTPConfig
 from models.history import SentEmail
+from models.telegram import TelegramDraft
 from services.mail_service import MailService
 from routes.subscription import generate_unsubscribe_link
 from __init__ import db
@@ -116,3 +117,17 @@ def upload_image():
         url = url_for('static', filename=f'uploads/{filename}', _external=True)
         return jsonify({'url': url})
     return jsonify({'error': {'message': 'Erreur lors de l\'envoi du fichier.'}}), 400
+
+
+@newsletter.route('/telegram_preview/<token>')
+def telegram_preview(token):
+    """
+    Public preview page for a newsletter draft generated via the Telegram bot.
+    The token is an unguessable UUID stored on the draft, so no login is required.
+    """
+    draft = TelegramDraft.query.filter_by(preview_token=token).first_or_404()
+    return render_template(
+        'newsletter/telegram_preview.html',
+        title='Aperçu Telegram',
+        draft=draft
+    )
