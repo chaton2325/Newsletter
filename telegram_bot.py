@@ -376,11 +376,11 @@ async def send_draft(query, draft, user):
     await query.edit_message_text(f"🚀 Newsletter envoyée à {total_sent} destinataire(s) sur {len(to_send)}.")
 
 
-def main():
+def build_application():
     with app.app_context():
         token = app.config.get('TELEGRAM_BOT_TOKEN')
-        if not token:
-            raise RuntimeError("TELEGRAM_BOT_TOKEN n'est pas configuré (voir .env).")
+    if not token:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN n'est pas configuré (voir .env).")
 
     application = Application.builder().token(token).build()
 
@@ -390,9 +390,30 @@ def main():
     application.add_handler(CommandHandler("newsletter", cmd_newsletter))
     application.add_handler(CallbackQueryHandler(handle_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    return application
 
+
+def run_bot_blocking(install_signal_handlers=True):
+    """
+    Starts the bot's polling loop and blocks until it stops.
+
+    install_signal_handlers must be False when this runs outside the main
+    thread (e.g. spawned from run.py alongside Flask), since asyncio/PTB can
+    only register OS signal handlers from the main thread.
+    """
+    import asyncio
+    asyncio.set_event_loop(asyncio.new_event_loop())
+
+    application = build_application()
     logger.info("Bot Telegram MIRLETTER démarré (polling)...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    kwargs = {"allowed_updates": Update.ALL_TYPES, "close_loop": False}
+    if not install_signal_handlers:
+        kwargs["stop_signals"] = None
+    application.run_polling(**kwargs)
+
+
+def main():
+    run_bot_blocking(install_signal_handlers=True)
 
 
 if __name__ == "__main__":
