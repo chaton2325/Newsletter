@@ -11,6 +11,11 @@ class Config:
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///mirletter.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
+    # Session and CSRF Configuration for iFrames
+    SESSION_COOKIE_SAMESITE = 'None'
+    SESSION_COOKIE_SECURE = True
+    WTF_CSRF_ENABLED = True
+    
     # Security: Key for encrypting SMTP passwords
     # Use a 32-byte base64 encoded string for Fernet encryption
     ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY') or '36lFeN6BodRNJLR-n3ZPQwzU1Zw4c55pPPzpGk5iaOw='
