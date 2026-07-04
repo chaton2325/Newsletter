@@ -14,15 +14,14 @@ class User(db.Model, UserMixin):
     password_hash = db.Column(db.String(128), nullable=False)
     role = db.Column(db.String(20), default='user') # 'superadmin' or 'user'
 
-    # Telegram bot linking
-    telegram_chat_id = db.Column(db.String(64), unique=True, nullable=True, index=True)
-    telegram_link_code = db.Column(db.String(32), unique=True, nullable=True)
-
     # Relationships
     smtp_configs = db.relationship('SMTPConfig', backref='user', lazy='dynamic', cascade='all, delete-orphan')
     contacts = db.relationship('Contact', backref='owner', lazy='dynamic', cascade='all, delete-orphan')
     groups = db.relationship('Group', backref='owner', lazy='dynamic', cascade='all, delete-orphan')
     sent_emails = db.relationship('SentEmail', backref='user', lazy='dynamic', cascade='all, delete-orphan')
+    telegram_links = db.relationship('TelegramLink', backref='user', lazy='dynamic', cascade='all, delete-orphan')
+    telegram_link_codes = db.relationship('TelegramLinkCode', backref='user', lazy='dynamic', cascade='all, delete-orphan')
+    scheduled_newsletters = db.relationship('ScheduledNewsletter', backref='user', lazy='dynamic', cascade='all, delete-orphan')
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

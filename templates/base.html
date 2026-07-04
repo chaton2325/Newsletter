@@ -21,8 +21,11 @@
             <a class="nav-link {{ 'active' if request.endpoint == 'main.dashboard' }}" href="{{ url_for('main.dashboard') }}">
                 <i class="bi bi-speedometer2 me-2"></i> Dashboard
             </a>
-            <a class="nav-link {{ 'active' if 'newsletter' in request.endpoint }}" href="{{ url_for('newsletter.compose') }}">
+            <a class="nav-link {{ 'active' if request.endpoint in ('newsletter.compose', 'newsletter.history') }}" href="{{ url_for('newsletter.compose') }}">
                 <i class="bi bi-send me-2"></i> Newsletter
+            </a>
+            <a class="nav-link {{ 'active' if request.endpoint in ('newsletter.scheduled',) }}" href="{{ url_for('newsletter.scheduled') }}">
+                <i class="bi bi-clock-history me-2"></i> Programmées
             </a>
             <a class="nav-link {{ 'active' if 'contacts' in request.endpoint }}" href="{{ url_for('contacts.list_contacts') }}">
                 <i class="bi bi-person-lines-fill me-2"></i> Contacts

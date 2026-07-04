@@ -11,9 +11,15 @@ class Config:
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///mirletter.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
-    # Session and CSRF Configuration for iFrames
-    SESSION_COOKIE_SAMESITE = 'None'
-    SESSION_COOKIE_SECURE = True
+    # Session and CSRF configuration.
+    # SameSite=None + Secure cookies are required for the public /subscription/iframe/*
+    # pages to work when embedded cross-site, but Secure cookies are silently dropped
+    # by browsers over plain HTTP — which breaks the *entire* session (including the
+    # CSRF secret) and causes "The CSRF session token is missing" on every login.
+    # Default to dev-safe values; set these two env vars once the site is served over
+    # HTTPS in production so the iframe embedding keeps working there.
+    SESSION_COOKIE_SAMESITE = os.environ.get('SESSION_COOKIE_SAMESITE', 'Lax')
+    SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'False').lower() == 'true'
     WTF_CSRF_ENABLED = True
     
     # Security: Key for encrypting SMTP passwords

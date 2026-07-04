@@ -2,16 +2,21 @@
 Bot Telegram MIRLETTER.
 
 Permet, depuis Telegram, de :
-- lier son compte MIRLETTER via un code généré dans Réglages > Bot Telegram
+- lier plusieurs comptes Telegram à un même compte MIRLETTER via un code généré dans
+  Réglages > Bot Telegram
 - générer du contenu HTML de newsletter via l'API Mistral
 - prévisualiser le rendu (lien web) et régénérer si besoin
-- choisir les groupes/contacts destinataires et envoyer la newsletter
+- choisir les groupes/contacts destinataires
+- envoyer immédiatement, ou programmer l'envoi (unique ou récurrent : quotidien,
+  hebdomadaire, mensuel)
 
-Lancement : python telegram_bot.py
+Lancement : python telegram_bot.py (ou automatiquement via run.py)
 Nécessite TELEGRAM_BOT_TOKEN et MISTRAL_API_KEY dans .env.
 """
 import logging
+from datetime import datetime
 
+from dateutil import parser as date_parser
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -24,10 +29,10 @@ from telegram.ext import (
 )
 
 from __init__ import create_app, db
-from models import User, Group, Contact, SMTPConfig, TelegramDraft
-from routes.subscription import generate_unsubscribe_link
-from services.mail_service import MailService
+from models import User, Group, Contact, SMTPConfig, TelegramDraft, TelegramLink, TelegramLinkCode
+from models.schedule import ScheduledNewsletter
 from services.mistral_service import MistralService
+from services.newsletter_service import send_newsletter
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -37,10 +42,19 @@ app = create_app()
 STATE_AWAITING_SUBJECT = "awaiting_subject"
 STATE_AWAITING_PROMPT = "awaiting_prompt"
 STATE_AWAITING_REGEN_PROMPT = "awaiting_regen_prompt"
+STATE_AWAITING_SCHEDULE_DATETIME = "awaiting_schedule_datetime"
+
+RECURRENCE_LABELS = {
+    'none': 'une seule fois',
+    'daily': 'tous les jours',
+    'weekly': 'toutes les semaines',
+    'monthly': 'tous les mois',
+}
 
 
 def get_linked_user(chat_id):
-    return User.query.filter_by(telegram_chat_id=str(chat_id)).first()
+    link = TelegramLink.query.filter_by(chat_id=str(chat_id)).first()
+    return link.user if link else None
 
 
 def draft_preview_markup(draft_id):
@@ -88,20 +102,31 @@ def recipient_menu(draft, user):
         draft.smtp_config_id = smtp_configs[0].id
         db.session.commit()
 
+    rows.append([InlineKeyboardButton("◀ Retour", callback_data=f"d:{draft.id}:back")])
     rows.append([
-        InlineKeyboardButton("◀ Retour", callback_data=f"d:{draft.id}:back"),
-        InlineKeyboardButton("🚀 Confirmer l'envoi", callback_data=f"d:{draft.id}:confirm"),
+        InlineKeyboardButton("🚀 Envoyer maintenant", callback_data=f"d:{draft.id}:confirm"),
+        InlineKeyboardButton("🕒 Programmer", callback_data=f"d:{draft.id}:schedule"),
     ])
 
     text = (
         "👥 <b>Choisissez les destinataires</b>\n\n"
         "Cochez les groupes et/ou contacts individuels à qui envoyer cette newsletter, "
-        "puis appuyez sur « Confirmer l'envoi »."
+        "puis envoyez-la maintenant ou programmez-la."
     )
     if not smtp_configs:
         text += "\n\n⚠️ Aucune configuration SMTP trouvée sur le site : ajoutez-en une avant d'envoyer."
 
     return text, InlineKeyboardMarkup(rows)
+
+
+def recurrence_menu(draft_id):
+    keyboard = [
+        [InlineKeyboardButton("Une seule fois", callback_data=f"rs:{draft_id}:none")],
+        [InlineKeyboardButton("Tous les jours", callback_data=f"rs:{draft_id}:daily")],
+        [InlineKeyboardButton("Toutes les semaines", callback_data=f"rs:{draft_id}:weekly")],
+        [InlineKeyboardButton("Tous les mois", callback_data=f"rs:{draft_id}:monthly")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -111,31 +136,42 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with app.app_context():
         if args:
             code = args[0].strip()
-            user = User.query.filter_by(telegram_link_code=code).first()
-            if not user:
+            link_code = TelegramLinkCode.query.filter_by(code=code).first()
+            if not link_code:
                 await update.message.reply_text(
                     "❌ Code de liaison invalide ou expiré. Régénérez-en un depuis Réglages > Bot Telegram sur le site."
                 )
                 return
-            user.telegram_chat_id = str(chat_id)
-            user.telegram_link_code = None
+
+            if TelegramLink.query.filter_by(chat_id=str(chat_id)).first():
+                await update.message.reply_text("Ce compte Telegram est déjà lié à un compte MIRLETTER.")
+                return
+
+            chat = update.effective_chat
+            label = chat.full_name or (f"@{chat.username}" if chat.username else f"Telegram {chat_id}")
+            user = User.query.get(link_code.user_id)
+
+            link = TelegramLink(user_id=link_code.user_id, chat_id=str(chat_id), label=label)
+            db.session.add(link)
+            db.session.delete(link_code)
             db.session.commit()
+
             await update.message.reply_text(
-                f"✅ Compte lié avec succès, bonjour {user.username} !\n\n"
-                "Utilisez /newsletter pour générer et envoyer une newsletter."
+                f"✅ Compte Telegram lié avec succès à {user.username} !\n\n"
+                "Utilisez /newsletter pour composer une newsletter, ou /scheduled pour voir les envois programmés."
             )
             return
 
         user = get_linked_user(chat_id)
         if user:
             await update.message.reply_text(
-                f"👋 Bonjour {user.username}, votre compte est déjà lié.\n"
+                f"👋 Bonjour, ce compte Telegram est lié à {user.username}.\n"
                 "Utilisez /newsletter pour composer une newsletter."
             )
         else:
             await update.message.reply_text(
                 "👋 Bienvenue sur le bot MIRLETTER !\n\n"
-                "Pour lier votre compte, rendez-vous dans Réglages > Bot Telegram sur le site, "
+                "Pour lier ce compte Telegram, rendez-vous dans Réglages > Bot Telegram sur le site, "
                 "générez un code, puis envoyez-moi : /start <code>"
             )
 
@@ -144,8 +180,9 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📋 <b>Commandes disponibles</b>\n\n"
         "/newsletter — générer une nouvelle newsletter avec l'IA\n"
+        "/scheduled — voir et annuler les envois programmés\n"
         "/cancel — annuler la composition en cours\n"
-        "/start &lt;code&gt; — lier votre compte MIRLETTER",
+        "/start &lt;code&gt; — lier ce compte Telegram à MIRLETTER",
         parse_mode=ParseMode.HTML,
     )
 
@@ -161,7 +198,7 @@ async def cmd_newsletter(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = get_linked_user(chat_id)
         if not user:
             await update.message.reply_text(
-                "❌ Votre compte Telegram n'est pas lié. Rendez-vous dans Réglages > Bot Telegram sur le site pour obtenir un code."
+                "❌ Ce compte Telegram n'est pas lié. Rendez-vous dans Réglages > Bot Telegram sur le site pour obtenir un code."
             )
             return
         if not user.smtp_configs.first():
@@ -173,6 +210,31 @@ async def cmd_newsletter(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     context.user_data['state'] = STATE_AWAITING_SUBJECT
     await update.message.reply_text("✏️ Quel est l'objet (sujet) de cette newsletter ?")
+
+
+async def cmd_scheduled(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    with app.app_context():
+        user = get_linked_user(chat_id)
+        if not user:
+            await update.message.reply_text("❌ Ce compte Telegram n'est pas lié.")
+            return
+
+        items = ScheduledNewsletter.query.filter_by(user_id=user.id, status='pending') \
+            .order_by(ScheduledNewsletter.scheduled_at.asc()).all()
+
+        if not items:
+            await update.message.reply_text("Aucune newsletter programmée pour le moment.")
+            return
+
+        for item in items:
+            text = (
+                f"🕒 <b>{item.subject}</b>\n"
+                f"Prochain envoi : {item.scheduled_at.strftime('%d/%m/%Y %H:%M')}\n"
+                f"Répétition : {RECURRENCE_LABELS.get(item.recurrence or 'none', 'une seule fois')}"
+            )
+            markup = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Annuler", callback_data=f"sched:{item.id}:cancel")]])
+            await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=markup)
 
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -242,6 +304,29 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         return
 
+    if state == STATE_AWAITING_SCHEDULE_DATETIME:
+        draft_id = context.user_data.get('draft_id')
+        try:
+            parsed = date_parser.parse(text, dayfirst=True)
+        except (ValueError, OverflowError):
+            await update.message.reply_text(
+                "❌ Date/heure non reconnue. Réessayez, par exemple : 10/07/2026 18:00"
+            )
+            return
+
+        if parsed < datetime.now():
+            await update.message.reply_text("❌ Cette date/heure est déjà passée. Choisissez une date future.")
+            return
+
+        context.user_data['schedule_dt'] = parsed
+        context.user_data['state'] = None
+        await update.message.reply_text(
+            f"📅 Envoi programmé pour le {parsed.strftime('%d/%m/%Y à %H:%M')}.\n\n"
+            "À quelle fréquence ?",
+            reply_markup=recurrence_menu(draft_id),
+        )
+        return
+
     await update.message.reply_text("Utilisez /newsletter pour composer une nouvelle newsletter.")
 
 
@@ -251,8 +336,69 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     parts = query.data.split(":")
-    if parts[0] != "d":
+    prefix = parts[0]
+
+    if prefix == "sched":
+        schedule_id = int(parts[1])
+        action = parts[2]
+        with app.app_context():
+            item = ScheduledNewsletter.query.get(schedule_id)
+            user = get_linked_user(chat_id)
+            if not item or not user or item.user_id != user.id:
+                await query.edit_message_text("❌ Introuvable.")
+                return
+            if action == "cancel":
+                item.status = 'cancelled'
+                db.session.commit()
+                await query.edit_message_text(f"❌ Envoi programmé « {item.subject} » annulé.")
         return
+
+    if prefix == "rs":
+        draft_id = int(parts[1])
+        recurrence = parts[2]
+        recurrence = None if recurrence == 'none' else recurrence
+        schedule_dt = context.user_data.get('schedule_dt')
+
+        with app.app_context():
+            draft = TelegramDraft.query.get(draft_id)
+            if not draft or draft.chat_id != str(chat_id):
+                await query.edit_message_text("❌ Brouillon introuvable.")
+                return
+            if not schedule_dt:
+                await query.edit_message_text("❌ Session expirée, relancez la programmation avec /newsletter.")
+                return
+
+            user = User.query.get(draft.user_id)
+            smtp_config = SMTPConfig.query.get(draft.smtp_config_id) if draft.smtp_config_id else user.smtp_configs.first()
+
+            scheduled_item = ScheduledNewsletter(
+                user_id=user.id,
+                source='telegram',
+                subject=draft.subject,
+                content=draft.content,
+                prompt=draft.prompt,
+                ai_generate=recurrence is not None,  # recurring campaigns re-generate content each run
+                smtp_config_id=smtp_config.id if smtp_config else None,
+                group_ids=draft.group_ids,
+                contact_ids=draft.contact_ids,
+                scheduled_at=schedule_dt,
+                recurrence=recurrence,
+            )
+            db.session.add(scheduled_item)
+            draft.status = 'scheduled'
+            db.session.commit()
+
+            label = RECURRENCE_LABELS.get(recurrence or 'none', 'une seule fois')
+            await query.edit_message_text(
+                f"🕒 Newsletter « {draft.subject} » programmée le "
+                f"{schedule_dt.strftime('%d/%m/%Y à %H:%M')} ({label})."
+            )
+        context.user_data.clear()
+        return
+
+    if prefix != "d":
+        return
+
     draft_id = int(parts[1])
     action = parts[2]
 
@@ -324,6 +470,18 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data.clear()
             return
 
+        if action == "schedule":
+            if not draft.get_group_ids() and not draft.get_contact_ids():
+                await query.answer("Sélectionnez au moins un groupe ou un contact.", show_alert=True)
+                return
+            context.user_data['state'] = STATE_AWAITING_SCHEDULE_DATETIME
+            context.user_data['draft_id'] = draft.id
+            await query.message.reply_text(
+                "🕒 À quelle date et heure voulez-vous programmer l'envoi ?\n"
+                "Exemple : 10/07/2026 18:00"
+            )
+            return
+
 
 async def send_draft(query, draft, user):
     group_ids = draft.get_group_ids()
@@ -339,41 +497,14 @@ async def send_draft(query, draft, user):
         return
 
     with app.test_request_context(base_url=app.config['SITE_BASE_URL']):
-        to_send = {}
-        for gid in group_ids:
-            group = Group.query.get(gid)
-            if group and group.user_id == user.id:
-                for sub in group.subscriptions:
-                    to_send[sub.contact.email] = (sub.contact.id, group.id)
-        for cid in contact_ids:
-            contact = Contact.query.get(cid)
-            if contact and contact.user_id == user.id:
-                to_send[contact.email] = (contact.id, 0)
-
-        total_sent = 0
-        for email, (contact_id, group_id) in to_send.items():
-            unsub_url = generate_unsubscribe_link(contact_id, group_id)
-            group_name = "our mailing list"
-            if group_id > 0:
-                g = Group.query.get(group_id)
-                if g:
-                    group_name = g.name
-            footer = (
-                f'<br><hr><p style="font-size: 12px; color: #999;">'
-                f'You are receiving this email because you are subscribed to {group_name}. '
-                f'<a href="{unsub_url}">Unsubscribe</a></p>'
-            )
-            personalized_content = (draft.content or "") + footer
-            success, _ = MailService.send_email(
-                user, smtp_config, draft.subject, personalized_content, [email]
-            )
-            if success:
-                total_sent += 1
-
+        total_sent, total_targeted = send_newsletter(
+            user, smtp_config, draft.subject, draft.content,
+            group_ids=group_ids, contact_ids=contact_ids
+        )
         draft.status = 'sent'
         db.session.commit()
 
-    await query.edit_message_text(f"🚀 Newsletter envoyée à {total_sent} destinataire(s) sur {len(to_send)}.")
+    await query.edit_message_text(f"🚀 Newsletter envoyée à {total_sent} destinataire(s) sur {total_targeted}.")
 
 
 def build_application():
@@ -388,6 +519,7 @@ def build_application():
     application.add_handler(CommandHandler("help", cmd_help))
     application.add_handler(CommandHandler("cancel", cmd_cancel))
     application.add_handler(CommandHandler("newsletter", cmd_newsletter))
+    application.add_handler(CommandHandler("scheduled", cmd_scheduled))
     application.add_handler(CallbackQueryHandler(handle_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     return application

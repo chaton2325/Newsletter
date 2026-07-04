@@ -22,14 +22,22 @@ def start_telegram_bot():
     thread.start()
 
 
+def start_scheduler():
+    """Lance le worker d'envois programmés/récurrents (newsletters web + Telegram)."""
+    from services.scheduler_service import init_scheduler
+    init_scheduler(app)
+
+
 if __name__ == '__main__':
     # Avec le reloader Werkzeug actif, ce script est exécuté deux fois : une fois comme
     # process moniteur, puis relancé dans un sous-processus enfant marqué WERKZEUG_RUN_MAIN=true,
-    # qui sert réellement les requêtes. On ne démarre le bot que dans ce process réel,
-    # pour éviter deux instances en conflit sur l'API Telegram (getUpdates 409 Conflict).
+    # qui sert réellement les requêtes. On ne démarre le bot et le scheduler que dans ce
+    # process réel, pour éviter des instances en double (conflit Telegram getUpdates 409,
+    # envois en double programmés).
     USE_RELOADER = True
     if not USE_RELOADER or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
         start_telegram_bot()
+        start_scheduler()
 
     # On autorise le mode debug pour le développement
     app.run(debug=True, port=9060, host='0.0.0.0', use_reloader=USE_RELOADER)

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h5 class="m-0 fw-bold">Newsletters programmées</h5>
+        <a href="{{ url_for('newsletter.compose') }}" class="btn btn-primary btn-sm rounded-pill px-3">
+            <i class="bi bi-plus-circle-fill me-1"></i> Nouvel envoi
+        </a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-4">Objet</th>
+                        <th>Prochain envoi</th>
+                        <th>Répétition</th>
+                        <th>Source</th>
+                        <th>Statut</th>
+                        <th class="pe-4 text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td class="ps-4 fw-medium">{{ item.subject }}</td>
+                        <td class="small">{{ item.scheduled_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td>
+                            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill">
+                                {{ recurrence_labels.get(item.recurrence, 'Une fois') }}
+                            </span>
+                        </td>
+                        <td class="small text-muted">
+                            {% if item.source == 'telegram' %}<i class="bi bi-telegram text-primary"></i> Telegram{% else %}<i class="bi bi-globe"></i> Site{% endif %}
+                        </td>
+                        <td>
+                            {% if item.status == 'pending' %}
+                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill px-3">En attente</span>
+                            {% elif item.status == 'sent' %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3">Envoyé</span>
+                            {% elif item.status == 'cancelled' %}
+                            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill px-3">Annulé</span>
+                            {% else %}
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-3" title="{{ item.last_error }}">Échec</span>
+                            {% endif %}
+                        </td>
+                        <td class="pe-4 text-end">
+                            {% if item.status == 'pending' %}
+                            <form method="POST" action="{{ url_for('newsletter.cancel_scheduled', id=item.id) }}" class="m-0 d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-x-circle me-1"></i> Annuler
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            <i class="bi bi-clock-history fs-1 d-block mb-3 opacity-25"></i>
+                            Aucune newsletter programmée.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

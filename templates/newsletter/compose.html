@@ -20,7 +20,22 @@
                                 <label class="form-label fw-bold small text-uppercase">Objet de l'email</label>
                                 {{ form.subject(class="form-control form-control-lg", placeholder="Ex: Notre nouvelle collection est disponible !", id="subject") }}
                             </div>
-                            
+
+                            <div class="card bg-light border-0 mb-3">
+                                <div class="card-body">
+                                    <label class="form-label fw-bold small text-uppercase text-primary">
+                                        <i class="bi bi-magic me-1"></i> Générer avec l'IA (Mistral)
+                                    </label>
+                                    <div class="input-group">
+                                        <textarea id="aiPrompt" class="form-control" rows="2" placeholder="Ex: Newsletter mensuelle annonçant notre nouvelle collection, ton chaleureux, avec un bouton d'appel à l'action."></textarea>
+                                        <button type="button" class="btn btn-primary" id="aiGenerateBtn">
+                                            <i class="bi bi-stars me-1"></i> Générer
+                                        </button>
+                                    </div>
+                                    <div class="form-text">Le contenu généré remplacera celui de l'éditeur ci-dessous.</div>
+                                </div>
+                            </div>
+
                             <div class="mb-3">
                                 <label class="form-label fw-bold small text-uppercase">Contenu du message</label>
                                 <!-- Le textarea original pour Summernote -->
@@ -58,12 +73,41 @@
                                     </div>
                                 </div>
                             </div>
-                            
+
+                            <div class="card bg-light border-0 mb-3">
+                                <div class="card-body">
+                                    <h6 class="fw-bold mb-3 small text-uppercase">Envoi</h6>
+                                    <div class="btn-group w-100 mb-3" role="group">
+                                        <input type="radio" class="btn-check" name="send_mode" id="sendModeNow" value="now" checked>
+                                        <label class="btn btn-outline-primary" for="sendModeNow">Envoyer maintenant</label>
+
+                                        <input type="radio" class="btn-check" name="send_mode" id="sendModeSchedule" value="schedule">
+                                        <label class="btn btn-outline-primary" for="sendModeSchedule">Programmer</label>
+                                    </div>
+
+                                    <div id="scheduleFields" class="d-none">
+                                        <div class="mb-3">
+                                            <label class="form-label small">Date et heure d'envoi</label>
+                                            <input type="datetime-local" class="form-control" name="scheduled_at" id="scheduledAt">
+                                        </div>
+                                        <div class="mb-1">
+                                            <label class="form-label small">Répétition</label>
+                                            <select class="form-select" name="recurrence" id="recurrence">
+                                                <option value="">Une seule fois</option>
+                                                <option value="daily">Tous les jours</option>
+                                                <option value="weekly">Toutes les semaines</option>
+                                                <option value="monthly">Tous les mois</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="d-grid gap-2">
                                 <button type="button" class="btn btn-outline-primary btn-lg" id="previewBtn">
                                     <i class="bi bi-eye me-2"></i> Prévisualiser
                                 </button>
-                                <button type="submit" class="btn btn-primary btn-lg">
+                                <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
                                     <i class="bi bi-send me-2"></i> Envoyer la newsletter
                                 </button>
                             </div>
@@ -144,6 +188,46 @@
                 }
             });
         }
+
+        $('input[name="send_mode"]').on('change', function() {
+            const isSchedule = $('#sendModeSchedule').is(':checked');
+            $('#scheduleFields').toggleClass('d-none', !isSchedule);
+            $('#submitBtn').html(
+                isSchedule
+                    ? '<i class="bi bi-clock-history me-2"></i> Programmer l\'envoi'
+                    : '<i class="bi bi-send me-2"></i> Envoyer la newsletter'
+            );
+        });
+
+        $('#aiGenerateBtn').on('click', function() {
+            const prompt = $('#aiPrompt').val().trim();
+            if (!prompt) {
+                alert("Décrivez d'abord le contenu à générer.");
+                return;
+            }
+            const $btn = $(this);
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Génération...');
+
+            $.ajax({
+                url: "{{ url_for('newsletter.generate_ai') }}",
+                method: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': "{{ csrf_token() }}" },
+                data: JSON.stringify({ prompt: prompt }),
+                success: function(response) {
+                    if (response.html) {
+                        $('#summernote').summernote('code', response.html);
+                    }
+                },
+                error: function(xhr) {
+                    const msg = (xhr.responseJSON && xhr.responseJSON.error) || "Erreur lors de la génération.";
+                    alert(msg);
+                },
+                complete: function() {
+                    $btn.prop('disabled', false).html('<i class="bi bi-stars me-1"></i> Générer');
+                }
+            });
+        });
 
         $('#previewBtn').on('click', function() {
             const subject = $('#subject').val();

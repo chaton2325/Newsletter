@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, current_app
 from flask_login import login_required, current_user
 from models.smtp import SMTPConfig
+from models.telegram import TelegramLink, TelegramLinkCode
 from services.mail_service import MailService
 from __init__ import db
 from flask_wtf import FlaskForm
@@ -104,27 +105,42 @@ def delete_smtp(id):
 @login_required
 def telegram():
     bot_username = current_app.config.get('TELEGRAM_BOT_USERNAME')
+    links = TelegramLink.query.filter_by(user_id=current_user.id).order_by(TelegramLink.linked_at.desc()).all()
+    pending_codes = TelegramLinkCode.query.filter_by(user_id=current_user.id).order_by(TelegramLinkCode.created_at.desc()).all()
     return render_template(
         'settings/telegram.html',
         title='Bot Telegram',
-        bot_username=bot_username
+        bot_username=bot_username,
+        links=links,
+        pending_codes=pending_codes,
     )
 
 
 @settings.route('/telegram/generate_code', methods=['POST'])
 @login_required
 def telegram_generate_code():
-    current_user.telegram_link_code = secrets.token_hex(4)
+    code = TelegramLinkCode(user_id=current_user.id, code=secrets.token_hex(4))
+    db.session.add(code)
     db.session.commit()
-    flash('Nouveau code de liaison généré.', 'success')
+    flash('Nouveau code de liaison généré. Il peut être utilisé pour lier un compte Telegram supplémentaire.', 'success')
     return redirect(url_for('settings.telegram'))
 
 
-@settings.route('/telegram/unlink', methods=['POST'])
+@settings.route('/telegram/code/<int:id>/delete', methods=['POST'])
 @login_required
-def telegram_unlink():
-    current_user.telegram_chat_id = None
-    current_user.telegram_link_code = None
+def telegram_delete_code(id):
+    code = TelegramLinkCode.query.filter_by(id=id, user_id=current_user.id).first_or_404()
+    db.session.delete(code)
+    db.session.commit()
+    flash('Code de liaison supprimé.', 'info')
+    return redirect(url_for('settings.telegram'))
+
+
+@settings.route('/telegram/unlink/<int:id>', methods=['POST'])
+@login_required
+def telegram_unlink(id):
+    link = TelegramLink.query.filter_by(id=id, user_id=current_user.id).first_or_404()
+    db.session.delete(link)
     db.session.commit()
     flash('Compte Telegram délié.', 'info')
     return redirect(url_for('settings.telegram'))

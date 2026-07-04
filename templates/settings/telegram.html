@@ -1,33 +1,55 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="card border-0 shadow-sm">
+<div class="card border-0 shadow-sm mb-4">
     <div class="card-header bg-white">
         <h5 class="m-0 fw-bold"><i class="bi bi-telegram me-2 text-primary"></i>Bot Telegram</h5>
     </div>
     <div class="card-body">
         <p class="text-muted">
-            Liez votre compte à notre bot Telegram pour générer du contenu HTML avec l'IA (Mistral),
-            le prévisualiser et l'envoyer à vos contacts ou groupes, directement depuis Telegram.
+            Liez un ou plusieurs comptes Telegram à votre compte mirletter pour générer du contenu HTML avec l'IA (Mistral),
+            le prévisualiser, le programmer et l'envoyer à vos contacts ou groupes, directement depuis Telegram.
+            Tous les comptes Telegram liés partagent les mêmes contacts, groupes et configurations SMTP.
         </p>
 
-        {% if current_user.telegram_chat_id %}
-        <div class="alert alert-success d-flex justify-content-between align-items-center border-0">
-            <div>
-                <i class="bi bi-check-circle-fill me-2"></i>
-                Votre compte est lié à Telegram (chat ID : <code>{{ current_user.telegram_chat_id }}</code>).
-            </div>
-            <form method="POST" action="{{ url_for('settings.telegram_unlink') }}" class="m-0">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-outline-danger btn-sm">Délier</button>
-            </form>
+        {% if links %}
+        <h6 class="fw-bold small text-uppercase mt-4 mb-3">Comptes Telegram liés</h6>
+        <div class="table-responsive mb-4">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-0">Nom / chat ID</th>
+                        <th>Lié le</th>
+                        <th class="text-end pe-0">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for link in links %}
+                    <tr>
+                        <td class="ps-0">
+                            <span class="fw-bold">{{ link.label or 'Telegram' }}</span>
+                            <br><code class="small">{{ link.chat_id }}</code>
+                        </td>
+                        <td>{{ link.linked_at.strftime('%d/%m/%Y %H:%M') if link.linked_at else '-' }}</td>
+                        <td class="text-end pe-0">
+                            <form method="POST" action="{{ url_for('settings.telegram_unlink', id=link.id) }}" class="m-0 d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-outline-danger btn-sm">Délier</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
         {% else %}
         <div class="alert alert-secondary border-0">
             <i class="bi bi-info-circle me-2"></i>
-            Votre compte n'est pas encore lié à Telegram.
+            Aucun compte Telegram n'est encore lié.
         </div>
+        {% endif %}
 
+        <h6 class="fw-bold small text-uppercase mb-3">Lier un nouveau compte Telegram</h6>
         <ol class="mb-4">
             <li>Générez un code de liaison ci-dessous.</li>
             <li>
@@ -37,29 +59,38 @@
                 {% else %}
                 notre bot Telegram
                 {% endif %}
-                sur Telegram.
+                depuis le compte Telegram à lier.
             </li>
             <li>Envoyez la commande <code>/start &lt;code&gt;</code> en remplaçant <code>&lt;code&gt;</code> par le code généré.</li>
         </ol>
 
-        {% if current_user.telegram_link_code %}
-        <div class="card bg-light border-0 mb-3">
-            <div class="card-body text-center">
-                <div class="small text-uppercase fw-bold text-muted mb-1">Votre code de liaison</div>
-                <div class="fs-3 fw-bold text-primary">{{ current_user.telegram_link_code }}</div>
-                <code class="d-block mt-2">/start {{ current_user.telegram_link_code }}</code>
+        {% if pending_codes %}
+        <div class="mb-3">
+            {% for code in pending_codes %}
+            <div class="card bg-light border-0 mb-2">
+                <div class="card-body py-2 d-flex justify-content-between align-items-center">
+                    <div>
+                        <code class="fw-bold">/start {{ code.code }}</code>
+                        <span class="text-muted small ms-2">généré le {{ code.created_at.strftime('%d/%m/%Y %H:%M') }}</span>
+                    </div>
+                    <form method="POST" action="{{ url_for('settings.telegram_delete_code', id=code.id) }}" class="m-0">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </form>
+                </div>
             </div>
+            {% endfor %}
         </div>
         {% endif %}
 
         <form method="POST" action="{{ url_for('settings.telegram_generate_code') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-primary">
-                <i class="bi bi-arrow-repeat me-1"></i>
-                {% if current_user.telegram_link_code %}Régénérer le code{% else %}Générer un code de liaison{% endif %}
+                <i class="bi bi-plus-circle me-1"></i> Générer un nouveau code de liaison
             </button>
         </form>
-        {% endif %}
     </div>
 </div>
 {% endblock %}
