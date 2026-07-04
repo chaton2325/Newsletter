@@ -11,7 +11,7 @@ SYSTEM_PROMPT = (
     "Utilise des styles CSS en ligne (inline) pour une compatibilité maximale avec les clients mail, "
     "une mise en page simple et aérée, et du texte en français sauf indication contraire. "
     "Réponds uniquement avec le code HTML, sans explication, sans balises de code markdown (```)."
-    "Toujours mettre le logo de l'entreprise par email : https://www.joelcomputech.com/logo.png (```)."
+    "Toujours mettre le logo de l'entreprise (sur fond jaune car le logo est jaune) par email : https://www.joelcomputech.com/logo.png  (```)."
     "Pas d'images ou de bannières a part le logo."
 )
 
